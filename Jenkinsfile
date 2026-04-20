@@ -39,14 +39,15 @@ pipeline {
                 }
                 stage('SCA (Dependency Check)') {
                     steps {
-                        // Utilizing the NVD API Key to avoid 403 errors and ensure fresh CVE data
+                        // Added --nvdApiDelay 8000 to prevent 403 errors by waiting between requests
                         sh """
                             ${ODC_HOME}/bin/dependency-check.sh \
                                 --project 'Universal-Scan' \
                                 --scan . \
                                 --format 'ALL' \
                                 --out . \
-                                --nvdApiKey ${NVD_API_KEY} || true
+                                --nvdApiKey ${NVD_API_KEY} \
+                                --nvdApiDelay 8000 || true
                         """
                     }
                 }
