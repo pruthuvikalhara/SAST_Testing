@@ -3,23 +3,27 @@ pipeline {
     environment {
         SCANNER_HOME = '/opt/sonar-scanner'
         ODC_HOME = '/opt/dependency-check'
+        // Using the NVD API Key as an environment variable is best practice
+        NVD_API_KEY = '8613479c-ad4f-4ed9-b39f-7346f723a600'
     }
     stages {
         stage('Universal Checkout') {
-            steps { checkout scm }
+            steps { 
+                checkout scm 
+            }
         }
 
         stage('Multi-Tool Security Scan') {
             parallel {
                 stage('Secret Scan') {
                     steps {
-                        // Redacting secrets in logs for professional reporting
+                        // Gitleaks identifies hardcoded secrets and redacts them in the logs
                         sh 'gitleaks detect --source . --verbose --redact || true'
                     }
                 }
                 stage('SAST (Pro Semgrep)') {
                     steps {
-                        // Using specialized rule-sets and saving to a human-readable text file
+                        // Advanced Semgrep scan using industry-standard security policies
                         sh '''
                             semgrep scan \
                                 --config p/security-audit \
@@ -35,7 +39,15 @@ pipeline {
                 }
                 stage('SCA (Dependency Check)') {
                     steps {
-                        sh "${ODC_HOME}/bin/dependency-check.sh --project 'Universal-Scan' --scan . --format 'ALL' --out . || true"
+                        // Utilizing the NVD API Key to avoid 403 errors and ensure fresh CVE data
+                        sh """
+                            ${ODC_HOME}/bin/dependency-check.sh \
+                                --project 'Universal-Scan' \
+                                --scan . \
+                                --format 'ALL' \
+                                --out . \
+                                --nvdApiKey ${NVD_API_KEY} || true
+                        """
                     }
                 }
             }
@@ -43,8 +55,8 @@ pipeline {
 
         stage('SonarQube Global Analysis') {
             steps {
-                // Fixed the naming issue with double quotes for the projectKey
                 withSonarQubeEnv('SonarQube-Server') {
+                    // Quotes around JOB_NAME handle spaces; . scans the entire repo
                     sh "${SCANNER_HOME}/bin/sonar-scanner \
                         -Dsonar.projectKey='${JOB_NAME}' \
                         -Dsonar.sources=. \
@@ -55,6 +67,7 @@ pipeline {
 
         stage("Quality Gate Enforcement") {
             steps {
+                // Fails the build if SonarQube marks the code as 'Failing'
                 timeout(time: 5, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
@@ -63,8 +76,8 @@ pipeline {
     }
     post {
         always {
-            // Explicitly archiving the human-readable semgrep report and ODC HTML
-            archiveArtifacts artifacts: 'semgrep-report.txt, dependency-check-report.html, *.json', allowEmptyArchive: true
+            // This ensures all your security reports are available for download in the Jenkins UI
+            archiveArtifacts artifacts: 'semgrep-report.txt, dependency-check-report.html, *.json, *.txt', allowEmptyArchive: true
         }
     }
 }
