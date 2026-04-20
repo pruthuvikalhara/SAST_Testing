@@ -3,7 +3,7 @@ pipeline {
     environment {
         SCANNER_HOME = '/opt/sonar-scanner'
         ODC_HOME = '/opt/dependency-check'
-        // Using the NVD API Key as an environment variable is best practice
+        // Using the NVD API Key as an environment variable
         NVD_API_KEY = '8613479c-ad4f-4ed9-b39f-7346f723a600'
     }
     stages {
@@ -39,7 +39,7 @@ pipeline {
                 }
                 stage('SCA (Dependency Check)') {
                     steps {
-                        // Added --nvdApiDelay 8000 to prevent 403 errors by waiting between requests
+                        // Using a 10s delay and 2m timeout to satisfy NVD/Cloudflare rate limits
                         sh """
                             ${ODC_HOME}/bin/dependency-check.sh \
                                 --project 'Universal-Scan' \
@@ -47,7 +47,8 @@ pipeline {
                                 --format 'ALL' \
                                 --out . \
                                 --nvdApiKey ${NVD_API_KEY} \
-                                --nvdApiDelay 8000 || true
+                                --nvdApiDelay 10000 \
+                                --connectionTimeout 120000 || true
                         """
                     }
                 }
@@ -57,7 +58,6 @@ pipeline {
         stage('SonarQube Global Analysis') {
             steps {
                 withSonarQubeEnv('SonarQube-Server') {
-                    // Quotes around JOB_NAME handle spaces; . scans the entire repo
                     sh "${SCANNER_HOME}/bin/sonar-scanner \
                         -Dsonar.projectKey='${JOB_NAME}' \
                         -Dsonar.sources=. \
@@ -77,7 +77,7 @@ pipeline {
     }
     post {
         always {
-            // This ensures all your security reports are available for download in the Jenkins UI
+            // Archiving all professional security reports for documentation
             archiveArtifacts artifacts: 'semgrep-report.txt, dependency-check-report.html, *.json, *.txt', allowEmptyArchive: true
         }
     }
