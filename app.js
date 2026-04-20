@@ -5,7 +5,7 @@ const fs = require('fs');
 const { exec } = require('child_process');
 const app = express();
 
-// --- CATEGORY 1: SECRETS & CREDENTIALS (3 Flaws) ---
+// --- CATEGORY 1: SECRETS & CREDENTIALS (3 Flaws) --
 // 1. Hardcoded Plaintext Password
 const dbPassword = "SuperSecretPassword123!"; 
 // 2. Hardcoded AWS Access Key (GitLeaks target)
