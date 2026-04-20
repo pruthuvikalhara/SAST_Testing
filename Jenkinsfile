@@ -13,19 +13,28 @@ pipeline {
             parallel {
                 stage('Secret Scan') {
                     steps {
-                        // Gitleaks automatically scans all file types
+                        // Redacting secrets in logs for professional reporting
                         sh 'gitleaks detect --source . --verbose --redact || true'
                     }
                 }
-                stage('SAST (Auto-Detect)') {
+                stage('SAST (Pro Semgrep)') {
                     steps {
-                        // Semgrep 'auto' detects the language and applies relevant rules
-                        sh 'semgrep scan --config auto --text || true'
+                        // Using specialized rule-sets and saving to a human-readable text file
+                        sh '''
+                            semgrep scan \
+                                --config p/security-audit \
+                                --config p/owasp-top-10 \
+                                --config p/javascript \
+                                --config p/nodejsscan \
+                                --text \
+                                --metrics=off \
+                                --output=semgrep-report.txt \
+                                --error || true
+                        '''
                     }
                 }
                 stage('SCA (Dependency Check)') {
                     steps {
-                        // Dependency-Check identifies libraries in any language (npm, pip, maven, etc.)
                         sh "${ODC_HOME}/bin/dependency-check.sh --project 'Universal-Scan' --scan . --format 'ALL' --out . || true"
                     }
                 }
@@ -34,10 +43,10 @@ pipeline {
 
         stage('SonarQube Global Analysis') {
             steps {
+                // Fixed the naming issue with double quotes for the projectKey
                 withSonarQubeEnv('SonarQube-Server') {
-                    // We remove -Dsonar.sources=app.js and use . to scan EVERYTHING
                     sh "${SCANNER_HOME}/bin/sonar-scanner \
-                        -Dsonar.projectKey=${JOB_NAME} \
+                        -Dsonar.projectKey='${JOB_NAME}' \
                         -Dsonar.sources=. \
                         -Dsonar.host.url=http://localhost:9000"
                 }
@@ -54,7 +63,8 @@ pipeline {
     }
     post {
         always {
-            archiveArtifacts artifacts: '*.json, *.txt, *.html', allowEmptyArchive: true
+            // Explicitly archiving the human-readable semgrep report and ODC HTML
+            archiveArtifacts artifacts: 'semgrep-report.txt, dependency-check-report.html, *.json', allowEmptyArchive: true
         }
     }
 }
